@@ -91,6 +91,8 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double delta = j[1]["steering_angle"];
+          double a = j[1]["throttle"];
           
           // Convert to Eigen vectors for polyfit
           Eigen::VectorXd ptsx_car(ptsx.size());
@@ -107,15 +109,24 @@ int main() {
           // Fit a polynomial to the x and y coordinates
           auto coeffs = polyfit(ptsx_car, ptsy_car, 3);
           
-          // Calculate the cross track error
+          // Calculates the cross track error
           double cte = polyeval(coeffs, 0);
           
           // Calculate the orientation error
           double epsi = -atan(coeffs[1]);
           
+          // Use kinematic model to predict state after a delay of 100ms
+          const double dt = 0.1; // 100ms Latency for predicting time at actuation
+          const double px_p = v * dt;
+          const double py_p = 0;
+          const double psi_p = - v * delta * dt / Lf;
+          const double v_p = v + a * dt;
+          const double cte_p = cte + v * sin(epsi) * dt;
+          const double epsi_p = epsi + psi_p;
+          
           // Create new vector with predicted state values
           Eigen::VectorXd state(6);
-          state << 0, 0, 0, v, cte, epsi;
+          state << px_p, py_p, psi_p, v_p, cte_p, epsi_p;
           
           // Execute solve function to retrieve actuations + x/y positions for display
           auto vars = mpc.Solve(state, coeffs);
@@ -123,7 +134,7 @@ int main() {
           // Calculate steering and throttle
           double steer_value = vars[0] / (deg2rad(max_angle) * Lf);
           double throttle_value = vars[1];
-          
+
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
@@ -131,8 +142,8 @@ int main() {
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals = { state[0] };
-          vector<double> mpc_y_vals = { state[1] };
+          vector<double> mpc_x_vals = {state[0]};
+          vector<double> mpc_y_vals = {state[1]};
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line

@@ -7,7 +7,7 @@
 using namespace std;
 
 static const double Lf = 2.67;
-static const double max_angle = 30.0;
+static const double max_angle = 25.0;
 
 class MPC {
  public:
