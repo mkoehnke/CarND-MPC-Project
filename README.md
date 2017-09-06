@@ -4,23 +4,67 @@ This project implements a Model Predictive Control in C++ to maneuver a vehicle 
 
 ## Model
 
-The kinematic model that is used in this project includes the x/y coordinates, orientation angle, velocity, crosstrack error and orientation error. The actuators are the steering angle and acceleration. Thus, the state vector has a length of 6.
+The model that is used in this project is a *kinematic model* that is a simplification of a dynamic model which ignore tire forces, gravity, and mass. This simplification reduces the accuracy of the models, but it also makes them more tractable.
+
+The vehicle state vector consists of 4 values:
+
+- **x (px)**: x-coordinate of the vehicle position
+- **y (py)**: y-coordinate of the vehicle position
+- **psi**: heading / orientation angle of the vehicle
+- **v**: velocity of the vehicle
+
+In addition, there are two actuator outputs:
+
+- **delta**: steering angle of the vehicle (*-25* degrees for full left steering and *25* degrees for full right steering)
+- **a**: acceleration of the vehicle (*-1* for full brake and *1* for full acceleration)
+
+In order to predict the state for the next time step, the following update equations have been used: 
+
+```
+x1 = (x0 + v0 * CppAD::cos(psi0) * dt);
+y1 = (y0 + v0 * CppAD::sin(psi0) * dt);
+psi1 = (psi0 - v0 * delta0 / Lf * dt);
+v1 = (v0 + a0 * dt);
+```
+
+They take current state and the actuators into account to predict the next state. Also, `dt` is the elapsed duration between predictions and `Lf` is the distance between the front and center of the gravity of the vehicle, which describes the steering radius. 
+
+
+To calculate an optimal trajectory for the given waypoints and the vehicle's kinematic model, two errors need to be minimized using a cost function.
+
+Those errors are:
+
+- **cte**: crosstrack error, that is the distance from the vehicle position to the track waypoints
+- **epsi**: orientation error of the vehicle
+
+In order to update those errors for the next time step, the following update equations were used:
+
+```
+cte1 = ((f0-y0) + (v0 * CppAD::sin(epsi0) * dt));
+epsi1 = ((psi0 - psi_des0) - v0 * delta0 / Lf * dt);
+```
 
 ### Polynomal Fitting
 
-In order to simplify the polynomal fitting, the waypoints received from the simulator had to be transformed to the vehicle's orientation (main.cpp 101-107).
+To simplify the polynomal fitting, the waypoints received from the simulator had to be transformed to the vehicle's orientation (main.cpp 101-107).
 
 ### Latency
 
 Handling the 100 millisecond latency was done by calculating a prediction of a future state vector based on the current state, dt=0.1 and the kinematic model (main.cpp 118-125).
 
-## Parameters
+## Choosing N/dt Parameters
 
-The *N* and *dt* values were choosen manually by trial and error. I started with N=9 (suggestion from the video) and dt=0.5 but found that too error-prone and ended up with: 
+The *N* and *dt* values were choosen manually by trial and error:
 
 N *(timestep length)*| dt *(elapsed duration between timesteps)* 
 :---: | :---:
 10 | 0.1
+
+Explanation: *N \* dt* is called a prediction horizon. 100ms * 10 means that in order to calculate an optimal trajectory, the optimizer is considering a duration of 1 second.
+
+In general, with a small prediction horizon the controller can calculate the trajectory much quicker, but is less accurate and less stable. Large prediction horizons are much more stable and smooth, but they increase the computational time and latency. 
+
+Before finding the mentioned values, I started with N=9 (suggestion from the video) and dt=0.5 but found that too error-prone. Also other values like N=20 / dt=1, N=15 / dt=0.8 etc. didn't work well, especially with faster speed. 
 
 ## Observations
 
